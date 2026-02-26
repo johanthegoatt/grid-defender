@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grid Defender</title>
+  <meta name="description" content="Grid defense simulation with wave logic.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="shell">
+    <section class="panel">
+      <h1>Grid Defender</h1>
+      <p>Place turrets, spawn waves, and keep enemies away from the base.</p>
+      <div class="actions">
+        <button id="spawn" type="button">Spawn Wave</button>
+        <button id="play" type="button">Auto Play</button>
+        <button id="pause" type="button">Pause</button>
+        <button id="tick" type="button">Advance Tick</button>
+        <button id="reset" type="button">Reset</button>
+      </div>
+      <div class="controls">
+        <label for="wave-size">Wave Size <input id="wave-size" type="number" min="1" max="12" value="4"></label>
+        <label for="sim-speed">
+          Speed
+          <select id="sim-speed">
+            <option value="900">Slow</option>
+            <option value="550" selected>Normal</option>
+            <option value="250">Fast</option>
+          </select>
+        </label>
+      </div>
+      <p id="status" class="status" aria-live="polite"></p>
+    </section>
+
+    <section class="panel">
+      <canvas id="arena" width="640" height="384" aria-label="Grid defense arena"></canvas>
+      <ul id="feed" class="feed"></ul>
+    </section>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
