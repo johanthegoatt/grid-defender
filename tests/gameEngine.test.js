@@ -79,3 +79,38 @@ test("resetGame restores initial state", () => {
   assert.equal(game.enemies.length, 0);
   assert.equal(game.credits, 30);
 });
+
+test("turrets do not waste shots on an enemy already killed this tick", async () => {
+  const state = createGame({ rows: 3, cols: 6 });
+  state.credits = 100;
+  placeTurret(state, 0, 2);
+  placeTurret(state, 1, 2);
+  state.enemies = [
+    { id: "a", row: 0, col: 3, hp: 1, armor: 0, speed: 1 },
+    { id: "b", row: 1, col: 4, hp: 1, armor: 0, speed: 1 },
+  ];
+  const summary = stepGame(state);
+  assert.equal(summary.defeated, 2);
+  assert.equal(state.enemies.length, 0);
+});
+
+test("selling refunds 70% of everything spent on the turret", async () => {
+  const { sellTurret, sellValue } = await import("../src/gameEngine.js");
+  const state = createGame();
+  state.credits = 100;
+  placeTurret(state, 2, 2);
+  upgradeTurret(state, 2, 2);
+  // 10 to place + 12 to upgrade = 22 spent, 70% back rounds down to 15.
+  assert.equal(sellValue(state.turrets[0]), 15);
+  const before = state.credits;
+  assert.equal(sellTurret(state, 2, 2), 15);
+  assert.equal(state.credits, before + 15);
+  assert.equal(state.turrets.length, 0);
+  assert.throws(() => sellTurret(state, 2, 2), /No turret here/);
+});
+
+test("errors say what went wrong in plain words", () => {
+  const state = createGame();
+  state.credits = 5;
+  assert.throws(() => placeTurret(state, 0, 0), /a turret costs 10/);
+});
