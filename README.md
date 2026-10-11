@@ -6,7 +6,10 @@ Grid Defender is a local browser strategy project where you place turrets on a g
 ## Features
 - Tile-based turret placement with credit economy
 - Wave spawning with per-tick enemy movement
-- Turret range and damage simulation
+- Turret range and damage simulation; turrets skip enemies already killed that tick
+- Tap a turret to see its reach, upgrade it or sell it for 70% of what it cost
+- Hover an empty tile to preview where a new turret would reach
+- Taps land on the right tile on any screen size
 - Base health loss when enemies escape
 - Canvas-rendered game board with manual and auto simulation modes
 - Adjustable simulation speed and wave size controls

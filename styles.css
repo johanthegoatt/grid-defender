@@ -109,3 +109,20 @@ button {
   font-family: Consolas, monospace;
   font-size: 0.78rem;
 }
+
+.tile-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.tile-panel[hidden] {
+  display: none;
+}
+
+.tile-panel p {
+  margin: 0;
+  flex: 1 1 14rem;
+}

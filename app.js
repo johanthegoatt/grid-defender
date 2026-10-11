@@ -1,4 +1,4 @@
-import { createGame, placeTurret, resetGame, spawnWave, stepGame, upgradeTurret } from "./src/gameEngine.js";
+import { createGame, placeTurret, resetGame, sellTurret, sellValue, spawnWave, stepGame, upgradeCost, upgradeTurret, TURRET_COST } from "./src/gameEngine.js";
 
 const canvas = document.getElementById("arena");
 const ctx = canvas.getContext("2d");
@@ -11,11 +11,17 @@ const tickBtn = document.getElementById("tick");
 const resetBtn = document.getElementById("reset");
 const waveSizeInput = document.getElementById("wave-size");
 const simSpeedSelect = document.getElementById("sim-speed");
+const tilePanel = document.getElementById("tile-panel");
+const tileText = document.getElementById("tile-text");
+const upgradeBtn = document.getElementById("upgrade");
+const sellBtn = document.getElementById("sell");
 
 const CELL = 64;
 const state = createGame({ rows: 6, cols: 10 });
 let loopId = 0;
 const feed = [];
+let selected = null;
+let hover = null;
 
 function pushFeed(message) {
   feed.unshift(`${new Date().toLocaleTimeString()} | ${message}`);
@@ -52,6 +58,31 @@ function drawGrid() {
   }
 }
 
+function drawRange(tile, range, color) {
+  ctx.fillStyle = color;
+  for (let r = 0; r < state.rows; r += 1) {
+    for (let c = 0; c < state.cols; c += 1) {
+      if (Math.abs(r - tile.row) + Math.abs(c - tile.col) <= range) {
+        ctx.fillRect(c * CELL + 1, r * CELL + 1, CELL - 2, CELL - 2);
+      }
+    }
+  }
+}
+
+function drawSelection() {
+  if (selected) {
+    const turret = state.turrets.find((t) => t.row === selected.row && t.col === selected.col);
+    if (turret) drawRange(turret, turret.range, "rgba(47,111,88,0.14)");
+    ctx.strokeStyle = "#1e252e";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(selected.col * CELL + 2, selected.row * CELL + 2, CELL - 4, CELL - 4);
+    ctx.lineWidth = 1;
+  } else if (hover && !state.turrets.some((t) => t.row === hover.row && t.col === hover.col)) {
+    // Show where a new turret would reach before you buy it.
+    drawRange(hover, 2, "rgba(47,111,88,0.08)");
+  }
+}
+
 function drawTurrets() {
   for (const turret of state.turrets) {
     ctx.fillStyle = "#2f6f58";
@@ -82,10 +113,12 @@ function drawEnemies() {
 
 function render() {
   drawGrid();
+  drawSelection();
   drawTurrets();
   drawEnemies();
   const mode = loopId ? "Auto" : "Manual";
   const gameState = state.gameOver ? "GAME OVER" : "ACTIVE";
+  syncTilePanel();
   statusEl.textContent = `Tick ${state.tick} | Wave ${state.wave} | Base ${state.baseHealth} HP | Credits ${state.credits} | Kills ${state.kills} | Escaped ${state.escaped} | Enemies ${state.enemies.length} | ${mode} | ${gameState}`;
 }
 
@@ -124,31 +157,113 @@ function pauseLoop() {
 }
 
 function spawnSelectedWave() {
+  if (state.gameOver) {
+    pushFeed("The base is down. Press Reset to play again.");
+    return;
+  }
   const size = Math.max(1, Math.min(12, Number(waveSizeInput.value) || 4));
   spawnWave(state, size);
   pushFeed(`Spawned wave ${state.wave} (${size} enemies).`);
   render();
 }
 
-canvas.addEventListener("click", (event) => {
+// The canvas is drawn at 640x384 but CSS shrinks it on small screens, so
+// map the click back to canvas pixels before picking a tile.
+function tileFromEvent(event) {
   const rect = canvas.getBoundingClientRect();
-  const x = event.clientX - rect.left;
-  const y = event.clientY - rect.top;
+  const x = ((event.clientX - rect.left) / rect.width) * canvas.width;
+  const y = ((event.clientY - rect.top) / rect.height) * canvas.height;
   const col = Math.floor(x / CELL);
   const row = Math.floor(y / CELL);
+  if (row < 0 || row >= state.rows || col < 0 || col >= state.cols) return null;
+  return { row, col };
+}
 
+function turretOn(tile) {
+  return tile ? state.turrets.find((t) => t.row === tile.row && t.col === tile.col) || null : null;
+}
+
+function syncTilePanel() {
+  const turret = turretOn(selected);
+  if (!turret) {
+    selected = null;
+    tilePanel.hidden = true;
+    return;
+  }
+  tilePanel.hidden = false;
+  const atTop = turret.level >= 3;
+  tileText.textContent = `Level ${turret.level} turret: ${turret.damage} damage, reach ${turret.range} tiles.`;
+  upgradeBtn.textContent = atTop ? "Top level" : `Upgrade (${upgradeCost(turret)})`;
+  upgradeBtn.disabled = atTop || state.credits < upgradeCost(turret);
+  sellBtn.textContent = `Sell (+${sellValue(turret)})`;
+}
+
+function tryAction(action) {
   try {
-    const hasTurret = state.turrets.some((turret) => turret.row === row && turret.col === col);
-    if (event.shiftKey && hasTurret) {
-      const upgraded = upgradeTurret(state, row, col);
-      pushFeed(`Upgraded turret to level ${upgraded.level} at row ${row}, col ${col}.`);
-    } else {
-      placeTurret(state, row, col);
-      pushFeed(`Placed turret at row ${row}, col ${col}.`);
+    action();
+  } catch (error) {
+    pushFeed(error.message);
+  }
+  render();
+}
+
+canvas.addEventListener("click", (event) => {
+  const tile = tileFromEvent(event);
+  if (!tile) return;
+
+  if (turretOn(tile)) {
+    // Tap a turret to select it; Shift+Click still upgrades in one go.
+    if (event.shiftKey) {
+      tryAction(() => {
+        const upgraded = upgradeTurret(state, tile.row, tile.col);
+        pushFeed(`Upgraded to level ${upgraded.level}.`);
+      });
+      return;
     }
+    selected = tile;
     render();
-  } catch {
-    pushFeed(`Action failed at row ${row}, col ${col}.`);
+    return;
+  }
+
+  selected = null;
+  tryAction(() => {
+    placeTurret(state, tile.row, tile.col);
+    pushFeed(`Placed a turret for ${TURRET_COST} credits.`);
+  });
+});
+
+canvas.addEventListener("pointermove", (event) => {
+  const tile = tileFromEvent(event);
+  if (tile?.row === hover?.row && tile?.col === hover?.col) return;
+  hover = tile;
+  render();
+});
+canvas.addEventListener("pointerleave", () => {
+  hover = null;
+  render();
+});
+
+upgradeBtn.addEventListener("click", () => {
+  if (!selected) return;
+  tryAction(() => {
+    const upgraded = upgradeTurret(state, selected.row, selected.col);
+    pushFeed(`Upgraded to level ${upgraded.level}.`);
+  });
+});
+
+sellBtn.addEventListener("click", () => {
+  if (!selected) return;
+  tryAction(() => {
+    const refund = sellTurret(state, selected.row, selected.col);
+    selected = null;
+    pushFeed(`Sold for ${refund} credits.`);
+  });
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    selected = null;
+    render();
   }
 });
 
@@ -166,10 +281,11 @@ simSpeedSelect.addEventListener("change", () => {
 resetBtn.addEventListener("click", () => {
   stopLoop();
   resetGame(state);
+  selected = null;
   feed.length = 0;
   pushFeed("Game reset.");
   render();
 });
 
-pushFeed("Tip: Click to place turrets. Shift+Click an existing turret tile to upgrade.");
+pushFeed(`Tap an empty tile to build a turret (${TURRET_COST} credits). Tap a turret to upgrade or sell it.`);
 render();
