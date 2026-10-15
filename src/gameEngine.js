@@ -254,3 +254,27 @@ export function stepGame(state) {
     hits
   };
 }
+
+// Save and load as plain JSON. Anything malformed loads as null so a bad
+// or old save starts a fresh game instead of breaking the board.
+export const SAVE_VERSION = 1;
+
+export function serializeGame(state) {
+  return JSON.stringify({ v: SAVE_VERSION, state });
+}
+
+export function deserializeGame(text) {
+  try {
+    const parsed = JSON.parse(text);
+    const state = parsed?.state;
+    if (parsed?.v !== SAVE_VERSION || !state || !Array.isArray(state.turrets) || !Array.isArray(state.enemies)) {
+      return null;
+    }
+    const numbers = ["rows", "cols", "credits", "baseHealth", "wave", "tick", "kills", "escaped", "enemySerial"];
+    if (!numbers.every((key) => Number.isFinite(state[key]))) return null;
+    if (state.turrets.some((t) => !TURRET_TYPES[t.type ?? "gun"] || !inBounds(state, t.row, t.col))) return null;
+    return { ...createGame({ rows: state.rows, cols: state.cols }), ...state };
+  } catch {
+    return null;
+  }
+}

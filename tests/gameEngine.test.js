@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createGame, placeTurret, resetGame, spawnWave, stepGame, upgradeTurret, TURRET_TYPES } from "../src/gameEngine.js";
+import { createGame, placeTurret, resetGame, spawnWave, stepGame, upgradeTurret, TURRET_TYPES, serializeGame, deserializeGame } from "../src/gameEngine.js";
 
 test("placeTurret consumes credits", () => {
   const game = createGame();
@@ -153,4 +153,23 @@ test("upgrading frost lengthens the chill instead of adding damage", () => {
   const upgraded = upgradeTurret(game, 0, 0);
   assert.equal(upgraded.damage, 0);
   assert.equal(upgraded.chill, 3);
+});
+
+test("a game survives a save and load round trip", () => {
+  const game = createGame();
+  placeTurret(game, 1, 1, "frost");
+  spawnWave(game, 3);
+  stepGame(game);
+  const loaded = deserializeGame(serializeGame(game));
+  assert.deepEqual(loaded, game);
+});
+
+test("broken or foreign saves load as nothing", () => {
+  assert.equal(deserializeGame("not json"), null);
+  assert.equal(deserializeGame(JSON.stringify({ v: 99, state: {} })), null);
+  const game = createGame();
+  placeTurret(game, 0, 0);
+  const tampered = JSON.parse(serializeGame(game));
+  tampered.state.turrets[0].row = 50;
+  assert.equal(deserializeGame(JSON.stringify(tampered)), null);
 });

@@ -1,4 +1,4 @@
-import { createGame, placeTurret, resetGame, sellTurret, sellValue, spawnWave, stepGame, upgradeCost, upgradeTurret, TURRET_TYPES } from "./src/gameEngine.js";
+import { createGame, deserializeGame, serializeGame, placeTurret, resetGame, sellTurret, sellValue, spawnWave, stepGame, upgradeCost, upgradeTurret, TURRET_TYPES } from "./src/gameEngine.js";
 
 const canvas = document.getElementById("arena");
 const ctx = canvas.getContext("2d");
@@ -17,7 +17,24 @@ const upgradeBtn = document.getElementById("upgrade");
 const sellBtn = document.getElementById("sell");
 
 const CELL = 64;
-const state = createGame({ rows: 6, cols: 10 });
+const SAVE_KEY = "grid-defender:save";
+// Picks up where the last visit left off; a fresh board otherwise.
+const state = loadSaved() ?? createGame({ rows: 6, cols: 10 });
+
+function loadSaved() {
+  try {
+    return deserializeGame(localStorage.getItem(SAVE_KEY) ?? "");
+  } catch {
+    return null;
+  }
+}
+
+function saveGame() {
+  try {
+    if (state.gameOver) localStorage.removeItem(SAVE_KEY);
+    else localStorage.setItem(SAVE_KEY, serializeGame(state));
+  } catch {}
+}
 let loopId = 0;
 const feed = [];
 let selected = null;
@@ -132,6 +149,7 @@ function drawEnemies() {
 }
 
 function render() {
+  saveGame();
   drawGrid();
   drawSelection();
   drawTurrets();
@@ -309,5 +327,7 @@ resetBtn.addEventListener("click", () => {
   render();
 });
 
-pushFeed("Pick a turret, then tap an empty tile to build it. Tap a turret to upgrade or sell it.");
+pushFeed(state.tick || state.turrets.length
+  ? `Welcome back: wave ${state.wave}, base at ${state.baseHealth} HP.`
+  : "Pick a turret, then tap an empty tile to build it. Tap a turret to upgrade or sell it.");
 render();

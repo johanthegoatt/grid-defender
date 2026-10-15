@@ -15,6 +15,7 @@ Grid Defender is a local browser strategy project where you place turrets on a g
 - Adjustable simulation speed and wave size controls
 - Event feed with combat summaries (hits, defeated, escaped)
 - Game-over handling and full reset flow
+- The board is saved in the browser after every move, so a reload or a closed tab picks up where you were
 
 ## Run
 ```bash
