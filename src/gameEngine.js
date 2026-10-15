@@ -1,10 +1,20 @@
-export const TURRET_COST = 10;
+// Three jobs, three trade-offs: the gun is cheap and constant, the sniper
+// reaches across the board but fires every other tick, and frost does no
+// damage at all, it slows what it touches so the others get more shots.
+export const TURRET_TYPES = {
+  gun: { label: "Gun", cost: 10, range: 2, damage: 1, cooldown: 1, chill: 0 },
+  sniper: { label: "Sniper", cost: 18, range: 4, damage: 3, cooldown: 2, chill: 0 },
+  frost: { label: "Frost", cost: 14, range: 2, damage: 0, cooldown: 1, chill: 2 }
+};
+
+export const TURRET_COST = TURRET_TYPES.gun.cost;
 // Selling refunds this share of everything spent on the turret, the same
 // rule Bloons TD 6 uses by default, so moving a turret costs something.
 export const SELL_REFUND = 0.7;
 
 export function upgradeCost(turret) {
-  return 8 + turret.level * 4;
+  const base = (TURRET_TYPES[turret.type] ?? TURRET_TYPES.gun).cost;
+  return Math.round(base * 0.8) + turret.level * 4;
 }
 
 export function createGame(config = {}) {
@@ -39,13 +49,18 @@ function inBounds(state, row, col) {
   return row >= 0 && row < state.rows && col >= 0 && col < state.cols;
 }
 
-export function placeTurret(state, row, col) {
+export function placeTurret(state, row, col, type = "gun") {
+  const spec = TURRET_TYPES[type];
+  if (!spec) {
+    throw new Error(`Unknown turret type "${type}".`);
+  }
+
   if (!inBounds(state, row, col)) {
     throw new Error("Turret placement is outside the board.");
   }
 
-  if (state.credits < TURRET_COST) {
-    throw new Error(`Not enough credits: a turret costs ${TURRET_COST}.`);
+  if (state.credits < spec.cost) {
+    throw new Error(`Not enough credits: a ${spec.label.toLowerCase()} costs ${spec.cost}.`);
   }
 
   if (state.turrets.some((turret) => turret.row === row && turret.col === col)) {
@@ -55,14 +70,18 @@ export function placeTurret(state, row, col) {
   const turret = {
     row,
     col,
+    type,
     level: 1,
-    range: 2,
-    damage: 1,
-    spent: TURRET_COST
+    range: spec.range,
+    damage: spec.damage,
+    chill: spec.chill,
+    cooldown: spec.cooldown,
+    ready: 0,
+    spent: spec.cost
   };
 
   state.turrets.push(turret);
-  state.credits -= TURRET_COST;
+  state.credits -= spec.cost;
   return turret;
 }
 
@@ -88,7 +107,9 @@ export function upgradeTurret(state, row, col) {
   state.credits -= cost;
   turret.spent = (turret.spent ?? TURRET_COST) + cost;
   turret.level += 1;
-  turret.damage += 1;
+  // Frost upgrades hold enemies longer instead of hitting harder.
+  if (turret.type === "frost") turret.chill += 1;
+  else turret.damage += 1;
   turret.range += 0.5;
   return turret;
 }
@@ -137,6 +158,7 @@ function distance(a, b) {
 }
 
 function damageTo(turret, enemy) {
+  if (!turret.damage) return 0;
   const mitigation = Number(enemy.armor || 0) * 0.5;
   return Math.max(1, turret.damage - mitigation);
 }
@@ -148,20 +170,37 @@ function damageTo(turret, enemy) {
 function turretFire(state) {
   let hitCount = 0;
   for (const turret of state.turrets) {
+    if ((turret.ready ?? 0) > 0) {
+      turret.ready -= 1;
+      continue;
+    }
+    // Frost prefers enemies it hasn't chilled yet, so two frosts spread out.
     const targets = state.enemies
       .filter((enemy) => enemy.hp > 0 && distance(turret, enemy) <= turret.range)
-      .sort((left, right) => left.col - right.col || left.hp - right.hp);
+      .sort((left, right) =>
+        (turret.chill ? (left.chilled > 0) - (right.chilled > 0) : 0) || left.col - right.col || left.hp - right.hp
+      );
     const target = targets[0];
     if (!target) continue;
     target.hp -= damageTo(turret, target);
+    if (turret.chill) target.chilled = Math.max(target.chilled || 0, turret.chill);
+    turret.ready = (turret.cooldown ?? 1) - 1;
     hitCount += 1;
   }
   return hitCount;
 }
 
+// A chilled enemy moves one tile slower; at speed 1 that means it only
+// moves every other tick while the chill lasts.
 function moveEnemies(state) {
   for (const enemy of state.enemies) {
-    enemy.col -= Number(enemy.speed || 1);
+    const speed = Number(enemy.speed || 1);
+    let step = speed;
+    if (enemy.chilled > 0) {
+      step = speed > 1 ? speed - 1 : state.tick % 2;
+      enemy.chilled -= 1;
+    }
+    enemy.col -= step;
   }
 }
 

@@ -1,4 +1,4 @@
-import { createGame, placeTurret, resetGame, sellTurret, sellValue, spawnWave, stepGame, upgradeCost, upgradeTurret, TURRET_COST } from "./src/gameEngine.js";
+import { createGame, placeTurret, resetGame, sellTurret, sellValue, spawnWave, stepGame, upgradeCost, upgradeTurret, TURRET_TYPES } from "./src/gameEngine.js";
 
 const canvas = document.getElementById("arena");
 const ctx = canvas.getContext("2d");
@@ -22,6 +22,20 @@ let loopId = 0;
 const feed = [];
 let selected = null;
 let hover = null;
+let buildType = "gun";
+
+const TURRET_COLORS = { gun: "#2f6f58", sniper: "#5b4a8a", frost: "#2f7fae" };
+
+const picker = document.querySelector(".turret-picker");
+picker.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-type]");
+  if (!button) return;
+  buildType = button.dataset.type;
+  for (const option of picker.querySelectorAll("[data-type]")) {
+    option.setAttribute("aria-checked", String(option === button));
+  }
+  render();
+});
 
 function pushFeed(message) {
   feed.unshift(`${new Date().toLocaleTimeString()} | ${message}`);
@@ -79,24 +93,30 @@ function drawSelection() {
     ctx.lineWidth = 1;
   } else if (hover && !state.turrets.some((t) => t.row === hover.row && t.col === hover.col)) {
     // Show where a new turret would reach before you buy it.
-    drawRange(hover, 2, "rgba(47,111,88,0.08)");
+    drawRange(hover, TURRET_TYPES[buildType].range, "rgba(47,111,88,0.08)");
   }
 }
 
 function drawTurrets() {
   for (const turret of state.turrets) {
-    ctx.fillStyle = "#2f6f58";
+    const type = turret.type ?? "gun";
+    ctx.fillStyle = TURRET_COLORS[type];
     ctx.fillRect(turret.col * CELL + 14, turret.row * CELL + 14, CELL - 28, CELL - 28);
+    // A dimmed sniper is reloading this tick.
+    if ((turret.ready ?? 0) > 0) {
+      ctx.fillStyle = "rgba(255,255,255,0.35)";
+      ctx.fillRect(turret.col * CELL + 14, turret.row * CELL + 14, CELL - 28, CELL - 28);
+    }
 
-    ctx.fillStyle = "#dbe5dd";
+    ctx.fillStyle = "#eef3ef";
     ctx.font = "12px Consolas";
-    ctx.fillText(`T${turret.level}`, turret.col * CELL + 22, turret.row * CELL + 38);
+    ctx.fillText(`${TURRET_TYPES[type].label[0]}${turret.level}`, turret.col * CELL + 22, turret.row * CELL + 38);
   }
 }
 
 function drawEnemies() {
   for (const enemy of state.enemies) {
-    ctx.fillStyle = "#c54837";
+    ctx.fillStyle = enemy.chilled > 0 ? "#6aa7cf" : "#c54837";
     ctx.beginPath();
     ctx.arc(enemy.col * CELL + CELL / 2, enemy.row * CELL + CELL / 2, 16, 0, Math.PI * 2);
     ctx.fill();
@@ -192,7 +212,9 @@ function syncTilePanel() {
   }
   tilePanel.hidden = false;
   const atTop = turret.level >= 3;
-  tileText.textContent = `Level ${turret.level} turret: ${turret.damage} damage, reach ${turret.range} tiles.`;
+  const label = TURRET_TYPES[turret.type ?? "gun"].label;
+  const effect = turret.chill ? `slows for ${turret.chill} ticks` : `${turret.damage} damage${turret.cooldown > 1 ? ` every ${turret.cooldown} ticks` : ""}`;
+  tileText.textContent = `Level ${turret.level} ${label.toLowerCase()}: ${effect}, reach ${turret.range} tiles.`;
   upgradeBtn.textContent = atTop ? "Top level" : `Upgrade (${upgradeCost(turret)})`;
   upgradeBtn.disabled = atTop || state.credits < upgradeCost(turret);
   sellBtn.textContent = `Sell (+${sellValue(turret)})`;
@@ -227,8 +249,8 @@ canvas.addEventListener("click", (event) => {
 
   selected = null;
   tryAction(() => {
-    placeTurret(state, tile.row, tile.col);
-    pushFeed(`Placed a turret for ${TURRET_COST} credits.`);
+    placeTurret(state, tile.row, tile.col, buildType);
+    pushFeed(`Placed a ${TURRET_TYPES[buildType].label.toLowerCase()} for ${TURRET_TYPES[buildType].cost} credits.`);
   });
 });
 
@@ -287,5 +309,5 @@ resetBtn.addEventListener("click", () => {
   render();
 });
 
-pushFeed(`Tap an empty tile to build a turret (${TURRET_COST} credits). Tap a turret to upgrade or sell it.`);
+pushFeed("Pick a turret, then tap an empty tile to build it. Tap a turret to upgrade or sell it.");
 render();

@@ -12,6 +12,11 @@
     <section class="panel">
       <h1>Grid Defender</h1>
       <p>Place turrets, spawn waves, and keep enemies away from the base.</p>
+      <div class="turret-picker" role="radiogroup" aria-label="Turret to build">
+        <button type="button" role="radio" data-type="gun" aria-checked="true">Gun <small>10</small></button>
+        <button type="button" role="radio" data-type="sniper" aria-checked="false">Sniper <small>18</small></button>
+        <button type="button" role="radio" data-type="frost" aria-checked="false">Frost <small>14</small></button>
+      </div>
       <div class="actions">
         <button id="spawn" type="button">Spawn Wave</button>
         <button id="play" type="button">Auto Play</button>
